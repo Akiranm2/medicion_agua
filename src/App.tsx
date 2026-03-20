@@ -22,12 +22,7 @@ const CATEGORIES: TariffCategory[] = [
   {
     key: 'domestico',
     label: 'Doméstico',
-    blocks: [
-      { upTo: 10, potable: 2.2, sewage: 1.38 },
-      { upTo: 20, potable: 2.36, sewage: 1.48 },
-      { upTo: 50, potable: 3.22, sewage: 1.98 },
-      { upTo: null, potable: 7.32, sewage: 3.49 },
-    ],
+    blocks: [{ upTo: null, potable: 2.4873, sewage: 1.5515 }],
   },
   {
     key: 'domestico-sub',
