@@ -95,6 +95,10 @@ function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
   const [totalConsumption, setTotalConsumption] = useState('25')
   const [personalConsumption, setPersonalConsumption] = useState('7.5')
+  const [fixedCharge, setFixedCharge] = useState('6.30')
+  const [igvPercent, setIgvPercent] = useState('18')
+  const [lateFee, setLateFee] = useState('2.76')
+  const [rounding, setRounding] = useState('0.06')
 
   const selectedCategory = useMemo(
     () => CATEGORIES.find((category) => category.key === categoryKey) ?? CATEGORIES[1],
@@ -103,11 +107,22 @@ function App() {
 
   const totalValue = Number(totalConsumption)
   const personalValue = Number(personalConsumption)
+  const fixedChargeValue = Number(fixedCharge)
+  const igvPercentValue = Number(igvPercent)
+  const lateFeeValue = Number(lateFee)
+  const roundingValue = Number(rounding)
   const hasValidValues =
     Number.isFinite(totalValue) &&
     Number.isFinite(personalValue) &&
+    Number.isFinite(fixedChargeValue) &&
+    Number.isFinite(igvPercentValue) &&
+    Number.isFinite(lateFeeValue) &&
+    Number.isFinite(roundingValue) &&
     totalValue > 0 &&
     personalValue >= 0 &&
+    fixedChargeValue >= 0 &&
+    igvPercentValue >= 0 &&
+    lateFeeValue >= 0 &&
     personalValue <= totalValue
 
   const summary = useMemo(() => {
@@ -116,16 +131,33 @@ function App() {
     }
 
     const variableTotal = calculateVariableCharge(totalValue, selectedCategory.blocks)
+    const baseBeforeTax = variableTotal + fixedChargeValue
+    const igvAmount = baseBeforeTax * (igvPercentValue / 100)
+    const totalBill = baseBeforeTax + igvAmount + lateFeeValue + roundingValue
     const participation = personalValue / totalValue
     const personalVariable = variableTotal * participation
+    const personalBill = totalBill * participation
 
     return {
       variableTotal,
+      fixedCharge: fixedChargeValue,
+      igvAmount,
+      totalBill,
       personalVariable,
+      personalBill,
       effectiveRate: variableTotal / totalValue,
       participation,
     }
-  }, [hasValidValues, personalValue, selectedCategory.blocks, totalValue])
+  }, [
+    fixedChargeValue,
+    hasValidValues,
+    igvPercentValue,
+    lateFeeValue,
+    personalValue,
+    roundingValue,
+    selectedCategory.blocks,
+    totalValue,
+  ])
 
   return (
     <main className="app-shell">
@@ -172,11 +204,55 @@ function App() {
               onChange={(event) => setPersonalConsumption(event.target.value)}
             />
           </label>
+
+          <label className="field">
+            <span>Cargo fijo mensual (S/)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={fixedCharge}
+              onChange={(event) => setFixedCharge(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span>I.G.V. (%)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={igvPercent}
+              onChange={(event) => setIgvPercent(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span>Mora (S/)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={lateFee}
+              onChange={(event) => setLateFee(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span>Redondeo (S/)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={rounding}
+              onChange={(event) => setRounding(event.target.value)}
+            />
+          </label>
         </div>
         {!hasValidValues && (
           <p className="validation">
-            Verifica los datos: el consumo total debe ser mayor a 0 y tu consumo no puede superar
-            el total.
+            Verifica los datos: valores positivos, consumo total mayor a 0 y tu consumo no puede
+            superar el total.
           </p>
         )}
       </section>
@@ -185,7 +261,7 @@ function App() {
         <section className="results-grid">
           <article className="result-card highlight">
             <p>Tu pago estimado</p>
-            <h2>{currency.format(summary.personalVariable)}</h2>
+            <h2>{currency.format(summary.personalBill)}</h2>
             <small>
               Participación: {decimal.format(summary.participation * 100)}% del consumo total
             </small>
@@ -193,8 +269,11 @@ function App() {
 
           <article className="result-card">
             <p>Recibo total del predio</p>
-            <h2>{currency.format(summary.variableTotal)}</h2>
-            <small>Solo consumo variable según bloques tarifarios</small>
+            <h2>{currency.format(summary.totalBill)}</h2>
+            <small>
+              Variable {currency.format(summary.variableTotal)} + fijo{' '}
+              {currency.format(summary.fixedCharge)} + I.G.V. {currency.format(summary.igvAmount)}
+            </small>
           </article>
 
           <article className="result-card">
@@ -209,7 +288,7 @@ function App() {
       <section className="footnote">
         <p>
           Referencia usada: Grupo 1 de Sedapal y tarifa por volumen de agua potable +
-          saneamiento. Este cálculo es referencial y no incluye IGV.
+          saneamiento. Puedes ajustar cargo fijo, I.G.V., mora y redondeo según tu recibo.
         </p>
       </section>
     </main>
