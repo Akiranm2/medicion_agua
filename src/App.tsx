@@ -13,6 +13,19 @@ type TariffCategory = {
   blocks: TariffBlock[]
 }
 
+/**
+ * =========================================================
+ * CONFIGURACIÓN GENERAL EDITABLE
+ * =========================================================
+ * Modifica aquí cualquier valor que Sedapal cambie en el futuro.
+ */
+const SETTINGS = {
+  igvPercent: 18,
+  fixedCharge: 6.3,
+  lateFee: 2.76,
+  rounding: 0.06,
+}
+
 const CATEGORIES: TariffCategory[] = [
   {
     key: 'social',
@@ -63,20 +76,13 @@ const currency = new Intl.NumberFormat('es-PE', {
   style: 'currency',
   currency: 'PEN',
   minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 })
 
 const decimal = new Intl.NumberFormat('es-PE', {
   minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+  maximumFractionDigits: 3,
 })
-
-const DEFAULT_IGV_PERCENT = 18
-const DEFAULT_FIXED_CHARGE = 6.3
-const DEFAULT_LATE_FEE = 2.76
-const DEFAULT_ROUNDING = 0.06
-
-const DOMESTIC_EFFECTIVE_POTABLE = 2.4873
-const DOMESTIC_EFFECTIVE_SEWAGE = 1.5515
 
 function calculateVariableCharge(consumption: number, blocks: TariffBlock[]) {
   if (consumption <= 0) {
@@ -104,6 +110,12 @@ function calculateVariableCharge(consumption: number, blocks: TariffBlock[]) {
   return cost
 }
 
+/**
+ * Devuelve los bloques desbloqueados por el consumo TOTAL del predio.
+ * Ejemplo:
+ * - 77 m3 desbloquea 4 bloques
+ * - 13 m3 desbloquea 2 bloques
+ */
 function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
   if (consumption <= 0) {
     return []
@@ -130,122 +142,116 @@ function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
   return unlocked
 }
 
+/**
+ * Reparte el consumo personal en partes iguales entre todos los bloques
+ * desbloqueados por el consumo total de la vivienda.
+ */
 function calculatePersonalByUnlockedBlocks(
   personalConsumptionValue: number,
   unlockedBlocks: TariffBlock[],
 ) {
   if (personalConsumptionValue <= 0 || unlockedBlocks.length === 0) {
-    return { personalPotable: 0, personalSewage: 0, perBlockVolume: 0 }
+    return {
+      personalPotable: 0,
+      personalSewage: 0,
+      perBlockVolume: 0,
+    }
   }
 
   const perBlockVolume = personalConsumptionValue / unlockedBlocks.length
+
   const personalPotable = unlockedBlocks.reduce(
     (sum, block) => sum + perBlockVolume * block.potable,
     0,
   )
+
   const personalSewage = unlockedBlocks.reduce(
     (sum, block) => sum + perBlockVolume * block.sewage,
     0,
   )
 
-  return { personalPotable, personalSewage, perBlockVolume }
-}
-
-function calculatePropertyVariableCharge(consumption: number, categoryKey: string, blocks: TariffBlock[]) {
-  if (categoryKey === 'domestico') {
-    return consumption * (DOMESTIC_EFFECTIVE_POTABLE + DOMESTIC_EFFECTIVE_SEWAGE)
+  return {
+    personalPotable,
+    personalSewage,
+    perBlockVolume,
   }
-
-  return calculateVariableCharge(consumption, blocks)
 }
 
 function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
-  const [totalConsumption, setTotalConsumption] = useState('25')
-  const [personalConsumption, setPersonalConsumption] = useState('7.5')
+
+  // Inputs (lo que el usuario escribe)
+  const [inputTotal, setInputTotal] = useState('77')
+  const [inputPersonal, setInputPersonal] = useState('13.1')
+
+  // Valores aplicados (solo cambian al presionar Enter o botón)
+  const [totalConsumption, setTotalConsumption] = useState(77)
+  const [personalConsumption, setPersonalConsumption] = useState(13.1)
 
   const selectedCategory = useMemo(
-    () => CATEGORIES.find((category) => category.key === categoryKey) ?? CATEGORIES[1],
+    () => CATEGORIES.find((c) => c.key === categoryKey) ?? CATEGORIES[1],
     [categoryKey],
   )
 
-  const totalValue = Number(totalConsumption)
-  const personalValue = Number(personalConsumption)
-  const igvPercentValue = DEFAULT_IGV_PERCENT
-  const fixedChargeValue = DEFAULT_FIXED_CHARGE
-  const lateFeeValue = DEFAULT_LATE_FEE
-  const roundingValue = DEFAULT_ROUNDING
-  const hasValidValues =
-    Number.isFinite(totalValue) &&
-    Number.isFinite(personalValue) &&
-    totalValue > 0 &&
-    personalValue >= 0 &&
-    personalValue <= totalValue
+  const applyCalculation = () => {
+    const total = Number(inputTotal)
+    const personal = Number(inputPersonal)
+
+    if (
+      Number.isFinite(total) &&
+      Number.isFinite(personal) &&
+      total > 0 &&
+      personal >= 0 &&
+      personal <= total
+    ) {
+      setTotalConsumption(total)
+      setPersonalConsumption(personal)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      applyCalculation()
+    }
+  }
 
   const summary = useMemo(() => {
-    if (!hasValidValues) {
-      return null
-    }
+    const IGV = SETTINGS.igvPercent / 100
 
-    const variableTotal = calculatePropertyVariableCharge(
-      totalValue,
-      selectedCategory.key,
-      selectedCategory.blocks,
-    )
-    const unlockedBlocks = getUnlockedBlocks(totalValue, selectedCategory.blocks)
-    const { personalPotable, personalSewage, perBlockVolume } = calculatePersonalByUnlockedBlocks(
-      personalValue,
-      unlockedBlocks,
-    )
+    const unlockedBlocks = getUnlockedBlocks(totalConsumption, selectedCategory.blocks)
+    const variableTotal = calculateVariableCharge(totalConsumption, selectedCategory.blocks)
+
+    const { personalPotable, personalSewage, perBlockVolume } =
+      calculatePersonalByUnlockedBlocks(personalConsumption, unlockedBlocks)
+
     const personalSubtotal = personalPotable + personalSewage
-    const personalIgv = personalSubtotal * (igvPercentValue / 100)
+    const personalIgv = personalSubtotal * IGV
     const personalFinal = personalSubtotal + personalIgv
-    const totalBase = variableTotal + fixedChargeValue
-    const totalIgv = totalBase * (igvPercentValue / 100)
-    const totalBill = totalBase + totalIgv + lateFeeValue + roundingValue
+
+    const totalBase = variableTotal + SETTINGS.fixedCharge
+    const totalIgv = totalBase * IGV
+    const totalBill = totalBase + totalIgv + SETTINGS.lateFee + SETTINGS.rounding
 
     return {
+      unlockedCount: unlockedBlocks.length,
+      perBlockVolume,
       variableTotal,
-      fixedCharge: fixedChargeValue,
-      totalIgv,
-      lateFee: lateFeeValue,
-      rounding: roundingValue,
       totalBill,
       personalPotable,
       personalSewage,
       personalSubtotal,
       personalIgv,
       personalFinal,
-      effectiveRate: variableTotal / totalValue,
-      unlockedCount: unlockedBlocks.length,
-      perBlockVolume,
     }
-  }, [
-    hasValidValues,
-    igvPercentValue,
-    selectedCategory.key,
-    selectedCategory.blocks,
-    totalValue,
-  ])
+  }, [categoryKey, personalConsumption, selectedCategory.blocks, totalConsumption])
 
   return (
     <main className="app-shell">
-      <section className="hero">
-        <p className="eyebrow">Calculadora Sedapal</p>
-        <h1>Calcula tu pago de agua en segundos</h1>
-        <p className="subtitle">
-          Ingresa el consumo total del predio y tu lectura personal. El consumo total se calcula
-          por tramos tarifarios y tu consumo se divide en partes iguales entre los bloques
-          desbloqueados por el consumo total. Luego se suma agua + saneamiento y se aplica I.G.V.
-          ({DEFAULT_IGV_PERCENT}% por defecto).
-        </p>
-      </section>
-
       <section className="calculator-card">
         <div className="grid">
           <label className="field">
             <span>Estructura tarifaria</span>
-            <select value={categoryKey} onChange={(event) => setCategoryKey(event.target.value)}>
+            <select value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)}>
               {CATEGORIES.map((category) => (
                 <option key={category.key} value={category.key}>
                   {category.label}
@@ -258,90 +264,47 @@ function App() {
             <span>Consumo total del predio (m³)</span>
             <input
               type="number"
-              min="0"
-              step="0.01"
-              value={totalConsumption}
-              onChange={(event) => setTotalConsumption(event.target.value)}
+              value={inputTotal}
+              onChange={(e) => setInputTotal(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
           </label>
 
           <label className="field">
-            <span>Tu consumo medido (m³)</span>
+            <span>Consumo medido (m³)</span>
             <input
               type="number"
-              min="0"
-              step="0.01"
-              value={personalConsumption}
-              onChange={(event) => setPersonalConsumption(event.target.value)}
+              value={inputPersonal}
+              onChange={(e) => setInputPersonal(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
           </label>
-
-          <label className="field">
-            <span>I.G.V. por defecto</span>
-            <input type="text" value={`${DEFAULT_IGV_PERCENT}%`} disabled />
-          </label>
         </div>
-        {!hasValidValues && (
-          <p className="validation">
-            Verifica los datos: valores positivos, consumo total mayor a 0 y tu consumo no puede
-            superar el total.
-          </p>
-        )}
+
+        <button className="calculate-btn" onClick={applyCalculation}>
+          Calcular
+        </button>
       </section>
 
-      {summary && (
-        <section className="results-grid">
-          <article className="result-card highlight">
-            <p>Tu pago estimado</p>
-            <h2>{currency.format(summary.personalFinal)}</h2>
-            <small>
-              {decimal.format(personalValue)} m³ ÷ {summary.unlockedCount} bloques ={' '}
-              {decimal.format(summary.perBlockVolume)} m³ por bloque
-            </small>
-          </article>
+      <section className="results-grid">
+        <article className="result-card highlight">
+          <p>Tu pago estimado</p>
+          <h2>{currency.format(summary.personalFinal)}</h2>
+          <small>
+            {decimal.format(personalConsumption)} m³ ÷ {summary.unlockedCount} escalas ={' '}
+            {decimal.format(summary.perBlockVolume)} m³ por escala
+          </small>
+        </article>
 
-          <article className="result-card">
-            <p>Recibo total del predio</p>
-            <h2>{currency.format(summary.totalBill)}</h2>
-            <small>
-              Variable {currency.format(summary.variableTotal)} + fijo{' '}
-              {currency.format(summary.fixedCharge)} + I.G.V. {currency.format(summary.totalIgv)} +
-              mora {currency.format(summary.lateFee)} + redondeo {currency.format(summary.rounding)}
-            </small>
-          </article>
+        <article className="result-card">
+          <p>Recibo total del predio</p>
+          <h2>{currency.format(summary.totalBill)}</h2>
+        </article>
 
-          <article className="result-card">
-            <p>Desglose personal</p>
-            <h2>{currency.format(summary.personalSubtotal)}</h2>
-            <small>
-              Agua {currency.format(summary.personalPotable)} + saneamiento{' '}
-              {currency.format(summary.personalSewage)} + I.G.V.{' '}
-              {currency.format(summary.personalIgv)}
-            </small>
-          </article>
-
-        </section>
-      )}
-
-      <section className="footnote">
-        <p>
-          Referencia usada: Grupo 1 de Sedapal y tarifa por volumen de agua potable +
-          saneamiento. El cálculo personal divide m³ en bloques desbloqueados y aplica I.G.V.
-        </p>
-      </section>
-
-      <section className="explain-card">
-        <h2>¿Cómo lo explicamos fácil?</h2>
-        <p>
-          Imagina que hay tres caños de colores para llenar baldes: uno azul (barato), uno verde
-          (medio) y uno rojo (caro). Cuando la casa usa más agua, se van abriendo más caños con
-          precios diferentes.
-        </p>
-        <p>
-          Como no sabemos en qué caño cayó exactamente tu parte, el sistema reparte tu consumo en
-          partes iguales entre los caños abiertos. Después suma agua + saneamiento y al final
-          agrega el I.G.V.
-        </p>
+        <article className="result-card">
+          <p>Desglose personal</p>
+          <h2>{currency.format(summary.personalSubtotal)}</h2>
+        </article>
       </section>
     </main>
   )
