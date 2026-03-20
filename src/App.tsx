@@ -127,26 +127,27 @@ function calculatePersonalByUnlockedBlocks(
   unlockedBlocks: TariffBlock[],
 ) {
   if (personalConsumptionValue <= 0 || unlockedBlocks.length === 0) {
-    return { personalVariable: 0, perBlockVolume: 0 }
+    return { personalPotable: 0, personalSewage: 0, perBlockVolume: 0 }
   }
 
   const perBlockVolume = personalConsumptionValue / unlockedBlocks.length
-  const personalVariable = unlockedBlocks.reduce(
-    (sum, block) => sum + perBlockVolume * (block.potable + block.sewage),
+  const personalPotable = unlockedBlocks.reduce(
+    (sum, block) => sum + perBlockVolume * block.potable,
+    0,
+  )
+  const personalSewage = unlockedBlocks.reduce(
+    (sum, block) => sum + perBlockVolume * block.sewage,
     0,
   )
 
-  return { personalVariable, perBlockVolume }
+  return { personalPotable, personalSewage, perBlockVolume }
 }
 
 function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
   const [totalConsumption, setTotalConsumption] = useState('25')
   const [personalConsumption, setPersonalConsumption] = useState('7.5')
-  const [fixedCharge, setFixedCharge] = useState('6.30')
   const [igvPercent, setIgvPercent] = useState('18')
-  const [lateFee, setLateFee] = useState('2.76')
-  const [rounding, setRounding] = useState('0.06')
 
   const selectedCategory = useMemo(
     () => CATEGORIES.find((category) => category.key === categoryKey) ?? CATEGORIES[1],
@@ -155,22 +156,14 @@ function App() {
 
   const totalValue = Number(totalConsumption)
   const personalValue = Number(personalConsumption)
-  const fixedChargeValue = Number(fixedCharge)
   const igvPercentValue = Number(igvPercent)
-  const lateFeeValue = Number(lateFee)
-  const roundingValue = Number(rounding)
   const hasValidValues =
     Number.isFinite(totalValue) &&
     Number.isFinite(personalValue) &&
-    Number.isFinite(fixedChargeValue) &&
     Number.isFinite(igvPercentValue) &&
-    Number.isFinite(lateFeeValue) &&
-    Number.isFinite(roundingValue) &&
     totalValue > 0 &&
     personalValue >= 0 &&
-    fixedChargeValue >= 0 &&
     igvPercentValue >= 0 &&
-    lateFeeValue >= 0 &&
     personalValue <= totalValue
 
   const summary = useMemo(() => {
@@ -180,30 +173,32 @@ function App() {
 
     const variableTotal = calculateVariableCharge(totalValue, selectedCategory.blocks)
     const unlockedBlocks = getUnlockedBlocks(totalValue, selectedCategory.blocks)
-    const { personalVariable, perBlockVolume } = calculatePersonalByUnlockedBlocks(
+    const { personalPotable, personalSewage, perBlockVolume } = calculatePersonalByUnlockedBlocks(
       personalValue,
       unlockedBlocks,
     )
-    const baseBeforeTax = variableTotal + fixedChargeValue
-    const igvAmount = baseBeforeTax * (igvPercentValue / 100)
-    const totalBill = baseBeforeTax + igvAmount + lateFeeValue + roundingValue
+    const personalSubtotal = personalPotable + personalSewage
+    const personalIgv = personalSubtotal * (igvPercentValue / 100)
+    const personalFinal = personalSubtotal + personalIgv
+    const totalIgv = variableTotal * (igvPercentValue / 100)
+    const totalBill = variableTotal + totalIgv
 
     return {
       variableTotal,
-      fixedCharge: fixedChargeValue,
-      igvAmount,
+      totalIgv,
       totalBill,
-      personalVariable,
+      personalPotable,
+      personalSewage,
+      personalSubtotal,
+      personalIgv,
+      personalFinal,
       effectiveRate: variableTotal / totalValue,
       unlockedCount: unlockedBlocks.length,
       perBlockVolume,
     }
   }, [
-    fixedChargeValue,
     hasValidValues,
     igvPercentValue,
-    lateFeeValue,
-    roundingValue,
     selectedCategory.blocks,
     totalValue,
   ])
@@ -216,7 +211,7 @@ function App() {
         <p className="subtitle">
           Ingresa el consumo total del predio y tu lectura personal. El consumo total se calcula
           por tramos tarifarios y tu consumo se divide en partes iguales entre los bloques
-          desbloqueados por el consumo total.
+          desbloqueados por el consumo total. Luego se suma agua + saneamiento y se aplica I.G.V.
         </p>
       </section>
 
@@ -256,17 +251,6 @@ function App() {
           </label>
 
           <label className="field">
-            <span>Cargo fijo mensual (S/)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={fixedCharge}
-              onChange={(event) => setFixedCharge(event.target.value)}
-            />
-          </label>
-
-          <label className="field">
             <span>I.G.V. (%)</span>
             <input
               type="number"
@@ -274,28 +258,6 @@ function App() {
               step="0.01"
               value={igvPercent}
               onChange={(event) => setIgvPercent(event.target.value)}
-            />
-          </label>
-
-          <label className="field">
-            <span>Mora (S/)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={lateFee}
-              onChange={(event) => setLateFee(event.target.value)}
-            />
-          </label>
-
-          <label className="field">
-            <span>Redondeo (S/)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={rounding}
-              onChange={(event) => setRounding(event.target.value)}
             />
           </label>
         </div>
@@ -311,7 +273,7 @@ function App() {
         <section className="results-grid">
           <article className="result-card highlight">
             <p>Tu pago estimado</p>
-            <h2>{currency.format(summary.personalVariable)}</h2>
+            <h2>{currency.format(summary.personalFinal)}</h2>
             <small>
               {decimal.format(personalValue)} m³ ÷ {summary.unlockedCount} bloques ={' '}
               {decimal.format(summary.perBlockVolume)} m³ por bloque
@@ -322,15 +284,19 @@ function App() {
             <p>Recibo total del predio</p>
             <h2>{currency.format(summary.totalBill)}</h2>
             <small>
-              Variable {currency.format(summary.variableTotal)} + fijo{' '}
-              {currency.format(summary.fixedCharge)} + I.G.V. {currency.format(summary.igvAmount)}
+              Variable {currency.format(summary.variableTotal)} + I.G.V.{' '}
+              {currency.format(summary.totalIgv)}
             </small>
           </article>
 
           <article className="result-card">
-            <p>Referencia de consumo</p>
-            <h2>{decimal.format(personalValue)} m³</h2>
-            <small>Tarifa efectiva total: S/ {decimal.format(summary.effectiveRate)} por m³</small>
+            <p>Desglose personal</p>
+            <h2>{currency.format(summary.personalSubtotal)}</h2>
+            <small>
+              Agua {currency.format(summary.personalPotable)} + saneamiento{' '}
+              {currency.format(summary.personalSewage)} + I.G.V.{' '}
+              {currency.format(summary.personalIgv)}
+            </small>
           </article>
 
         </section>
@@ -339,7 +305,7 @@ function App() {
       <section className="footnote">
         <p>
           Referencia usada: Grupo 1 de Sedapal y tarifa por volumen de agua potable +
-          saneamiento. Puedes ajustar cargo fijo, I.G.V., mora y redondeo según tu recibo.
+          saneamiento. El cálculo personal divide m³ en bloques desbloqueados y aplica I.G.V.
         </p>
       </section>
     </main>
