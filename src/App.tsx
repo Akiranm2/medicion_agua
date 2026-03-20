@@ -70,6 +70,9 @@ const decimal = new Intl.NumberFormat('es-PE', {
   maximumFractionDigits: 2,
 })
 
+const DOMESTIC_EFFECTIVE_POTABLE = 2.4873
+const DOMESTIC_EFFECTIVE_SEWAGE = 1.5515
+
 function calculateVariableCharge(consumption: number, blocks: TariffBlock[]) {
   if (consumption <= 0) {
     return 0
@@ -143,11 +146,22 @@ function calculatePersonalByUnlockedBlocks(
   return { personalPotable, personalSewage, perBlockVolume }
 }
 
+function calculatePropertyVariableCharge(consumption: number, categoryKey: string, blocks: TariffBlock[]) {
+  if (categoryKey === 'domestico') {
+    return consumption * (DOMESTIC_EFFECTIVE_POTABLE + DOMESTIC_EFFECTIVE_SEWAGE)
+  }
+
+  return calculateVariableCharge(consumption, blocks)
+}
+
 function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
   const [totalConsumption, setTotalConsumption] = useState('25')
   const [personalConsumption, setPersonalConsumption] = useState('7.5')
   const [igvPercent, setIgvPercent] = useState('18')
+  const [fixedCharge, setFixedCharge] = useState('6.30')
+  const [lateFee, setLateFee] = useState('2.76')
+  const [rounding, setRounding] = useState('0.06')
 
   const selectedCategory = useMemo(
     () => CATEGORIES.find((category) => category.key === categoryKey) ?? CATEGORIES[1],
@@ -157,13 +171,21 @@ function App() {
   const totalValue = Number(totalConsumption)
   const personalValue = Number(personalConsumption)
   const igvPercentValue = Number(igvPercent)
+  const fixedChargeValue = Number(fixedCharge)
+  const lateFeeValue = Number(lateFee)
+  const roundingValue = Number(rounding)
   const hasValidValues =
     Number.isFinite(totalValue) &&
     Number.isFinite(personalValue) &&
     Number.isFinite(igvPercentValue) &&
+    Number.isFinite(fixedChargeValue) &&
+    Number.isFinite(lateFeeValue) &&
+    Number.isFinite(roundingValue) &&
     totalValue > 0 &&
     personalValue >= 0 &&
     igvPercentValue >= 0 &&
+    fixedChargeValue >= 0 &&
+    lateFeeValue >= 0 &&
     personalValue <= totalValue
 
   const summary = useMemo(() => {
@@ -171,7 +193,11 @@ function App() {
       return null
     }
 
-    const variableTotal = calculateVariableCharge(totalValue, selectedCategory.blocks)
+    const variableTotal = calculatePropertyVariableCharge(
+      totalValue,
+      selectedCategory.key,
+      selectedCategory.blocks,
+    )
     const unlockedBlocks = getUnlockedBlocks(totalValue, selectedCategory.blocks)
     const { personalPotable, personalSewage, perBlockVolume } = calculatePersonalByUnlockedBlocks(
       personalValue,
@@ -180,12 +206,16 @@ function App() {
     const personalSubtotal = personalPotable + personalSewage
     const personalIgv = personalSubtotal * (igvPercentValue / 100)
     const personalFinal = personalSubtotal + personalIgv
-    const totalIgv = variableTotal * (igvPercentValue / 100)
-    const totalBill = variableTotal + totalIgv
+    const totalBase = variableTotal + fixedChargeValue
+    const totalIgv = totalBase * (igvPercentValue / 100)
+    const totalBill = totalBase + totalIgv + lateFeeValue + roundingValue
 
     return {
       variableTotal,
+      fixedCharge: fixedChargeValue,
       totalIgv,
+      lateFee: lateFeeValue,
+      rounding: roundingValue,
       totalBill,
       personalPotable,
       personalSewage,
@@ -197,8 +227,12 @@ function App() {
       perBlockVolume,
     }
   }, [
+    fixedChargeValue,
     hasValidValues,
     igvPercentValue,
+    lateFeeValue,
+    roundingValue,
+    selectedCategory.key,
     selectedCategory.blocks,
     totalValue,
   ])
@@ -260,6 +294,39 @@ function App() {
               onChange={(event) => setIgvPercent(event.target.value)}
             />
           </label>
+
+          <label className="field">
+            <span>Cargo fijo mensual (S/)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={fixedCharge}
+              onChange={(event) => setFixedCharge(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span>Mora (S/)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={lateFee}
+              onChange={(event) => setLateFee(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span>Redondeo (S/)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={rounding}
+              onChange={(event) => setRounding(event.target.value)}
+            />
+          </label>
         </div>
         {!hasValidValues && (
           <p className="validation">
@@ -284,8 +351,9 @@ function App() {
             <p>Recibo total del predio</p>
             <h2>{currency.format(summary.totalBill)}</h2>
             <small>
-              Variable {currency.format(summary.variableTotal)} + I.G.V.{' '}
-              {currency.format(summary.totalIgv)}
+              Variable {currency.format(summary.variableTotal)} + fijo{' '}
+              {currency.format(summary.fixedCharge)} + I.G.V. {currency.format(summary.totalIgv)} +
+              mora {currency.format(summary.lateFee)} + redondeo {currency.format(summary.rounding)}
             </small>
           </article>
 
