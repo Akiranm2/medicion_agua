@@ -22,7 +22,12 @@ const CATEGORIES: TariffCategory[] = [
   {
     key: 'domestico',
     label: 'Doméstico',
-    blocks: [{ upTo: null, potable: 2.4873, sewage: 1.5515 }],
+    blocks: [
+      { upTo: 10, potable: 2.2, sewage: 1.38 },
+      { upTo: 20, potable: 2.36, sewage: 1.48 },
+      { upTo: 50, potable: 3.22, sewage: 1.98 },
+      { upTo: null, potable: 7.32, sewage: 3.49 },
+    ],
   },
   {
     key: 'domestico-sub',
@@ -91,6 +96,49 @@ function calculateVariableCharge(consumption: number, blocks: TariffBlock[]) {
   return cost
 }
 
+function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
+  if (consumption <= 0) {
+    return []
+  }
+
+  const unlocked: TariffBlock[] = []
+  let previousLimit = 0
+
+  for (const block of blocks) {
+    const currentLimit = block.upTo ?? Number.POSITIVE_INFINITY
+    const blockVolume = Math.max(0, Math.min(consumption, currentLimit) - previousLimit)
+
+    if (blockVolume > 0) {
+      unlocked.push(block)
+    }
+
+    previousLimit = currentLimit
+
+    if (consumption <= currentLimit) {
+      break
+    }
+  }
+
+  return unlocked
+}
+
+function calculatePersonalByUnlockedBlocks(
+  personalConsumptionValue: number,
+  unlockedBlocks: TariffBlock[],
+) {
+  if (personalConsumptionValue <= 0 || unlockedBlocks.length === 0) {
+    return { personalVariable: 0, perBlockVolume: 0 }
+  }
+
+  const perBlockVolume = personalConsumptionValue / unlockedBlocks.length
+  const personalVariable = unlockedBlocks.reduce(
+    (sum, block) => sum + perBlockVolume * (block.potable + block.sewage),
+    0,
+  )
+
+  return { personalVariable, perBlockVolume }
+}
+
 function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
   const [totalConsumption, setTotalConsumption] = useState('25')
@@ -131,12 +179,14 @@ function App() {
     }
 
     const variableTotal = calculateVariableCharge(totalValue, selectedCategory.blocks)
+    const unlockedBlocks = getUnlockedBlocks(totalValue, selectedCategory.blocks)
+    const { personalVariable, perBlockVolume } = calculatePersonalByUnlockedBlocks(
+      personalValue,
+      unlockedBlocks,
+    )
     const baseBeforeTax = variableTotal + fixedChargeValue
     const igvAmount = baseBeforeTax * (igvPercentValue / 100)
     const totalBill = baseBeforeTax + igvAmount + lateFeeValue + roundingValue
-    const participation = personalValue / totalValue
-    const personalVariable = variableTotal * participation
-    const personalBill = totalBill * participation
 
     return {
       variableTotal,
@@ -144,16 +194,15 @@ function App() {
       igvAmount,
       totalBill,
       personalVariable,
-      personalBill,
       effectiveRate: variableTotal / totalValue,
-      participation,
+      unlockedCount: unlockedBlocks.length,
+      perBlockVolume,
     }
   }, [
     fixedChargeValue,
     hasValidValues,
     igvPercentValue,
     lateFeeValue,
-    personalValue,
     roundingValue,
     selectedCategory.blocks,
     totalValue,
@@ -165,8 +214,9 @@ function App() {
         <p className="eyebrow">Calculadora Sedapal</p>
         <h1>Calcula tu pago de agua en segundos</h1>
         <p className="subtitle">
-          Ingresa el consumo total del predio y tu lectura personal. El sistema estima el monto
-          proporcional usando la estructura tarifaria seleccionada.
+          Ingresa el consumo total del predio y tu lectura personal. El consumo total se calcula
+          por tramos tarifarios y tu consumo se divide en partes iguales entre los bloques
+          desbloqueados por el consumo total.
         </p>
       </section>
 
@@ -261,9 +311,10 @@ function App() {
         <section className="results-grid">
           <article className="result-card highlight">
             <p>Tu pago estimado</p>
-            <h2>{currency.format(summary.personalBill)}</h2>
+            <h2>{currency.format(summary.personalVariable)}</h2>
             <small>
-              Participación: {decimal.format(summary.participation * 100)}% del consumo total
+              {decimal.format(personalValue)} m³ ÷ {summary.unlockedCount} bloques ={' '}
+              {decimal.format(summary.perBlockVolume)} m³ por bloque
             </small>
           </article>
 
@@ -277,9 +328,9 @@ function App() {
           </article>
 
           <article className="result-card">
-            <p>Tu parte variable</p>
-            <h2>{currency.format(summary.personalVariable)}</h2>
-            <small>Tarifa efectiva: S/ {decimal.format(summary.effectiveRate)} por m³</small>
+            <p>Referencia de consumo</p>
+            <h2>{decimal.format(personalValue)} m³</h2>
+            <small>Tarifa efectiva total: S/ {decimal.format(summary.effectiveRate)} por m³</small>
           </article>
 
         </section>
