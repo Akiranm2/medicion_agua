@@ -337,7 +337,7 @@ function App() {
 
         <hr />
 
-        <h3>🧒 Explicación como para un niño de 3 años</h3>
+        <h3> Explicación </h3>
 
         <p>
           Imagina que hay <strong>{summary.unlockedCount} salidas de agua</strong>, como si fueran{' '}
