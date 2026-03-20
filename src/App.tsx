@@ -315,22 +315,88 @@ function App() {
 
       <section className="explain-card">
         <h2>¿Cómo funciona? Explicado fácil</h2>
-        <p>
-          Si la casa consume bastante agua, se activan más escalas. Luego tu consumo se reparte
-          entre esas escalas activadas.
-        </p>
-        <p>
-          Por ejemplo, si el predio consumió <strong>77 m³</strong> y se activaron{' '}
-          <strong>4 escalas</strong>, entonces un consumo personal de <strong>13 m³</strong> se
-          divide así:
-        </p>
-        <p>
-          <strong>13 ÷ 4 = 3.25 m³</strong> por escala.
-        </p>
-        <p>
-          Después se suma agua, saneamiento y finalmente se agrega el <strong>I.G.V.</strong>.
-        </p>
+
+  <p>
+    En esta casa se consumieron <strong>{decimal.format(appliedTotal)} m³</strong> en total.
+    Eso activa <strong>{summary.unlockedCount} escalas</strong> de cobro.
+  </p>
+
+  <p>
+    Tu consumo fue de <strong>{decimal.format(appliedPersonal)} m³</strong>, así que se divide entre
+    esas escalas:
+  </p>
+
+  <p>
+    <strong>
+      {decimal.format(appliedPersonal)} ÷ {summary.unlockedCount} ={' '}
+      {decimal.format(summary.perBlockVolume)} m³ por escala
+    </strong>
+  </p>
+
+  <hr />
+
+  <h3>🧒 Explicación como para un niño de 3 años</h3>
+
+  <p>
+    Imagina que hay <strong>{summary.unlockedCount} cañitos de agua</strong> (grifos):
+  </p>
+
+  <ul>
+    {Array.from({ length: summary.unlockedCount }).map((_, i) => (
+      <li key={i}>
+        🚰 Cañito {i + 1} (precio diferente)
+      </li>
+    ))}
+  </ul>
+
+  <p>
+    La casa abrió todos esos cañitos porque usó mucha agua.
+  </p>
+
+  <p>
+    Ahora tú usaste <strong>{decimal.format(appliedPersonal)} m³</strong>, entonces es como si
+    llenaras todos los cañitos por igual:
+  </p>
+
+  <p>
+    Cada cañito recibe <strong>{decimal.format(summary.perBlockVolume)} m³</strong>
+  </p>
+
+  <p>
+    ⚠️ Pero aquí está lo importante:
+  </p>
+
+  <p>
+    Cada cañito cobra distinto:
+  </p>
+
+  <ul>
+    {selectedCategory.blocks.slice(0, summary.unlockedCount).map((b, i) => (
+      <li key={i}>
+        💧 Cañito {i + 1}: S/ {(b.potable + b.sewage).toFixed(2)} por m³
+      </li>
+    ))}
+  </ul>
+
+  <p>
+    Entonces, aunque pongas la misma agua en cada uno, unos cobran barato y otros caro.
+  </p>
+
+  <p>
+    👉 Por eso tu pago no es simplemente “todo al mismo precio”.
+  </p>
+
+  <p>
+    Es una mezcla de varios precios al mismo tiempo.
+  </p>
       </section>
+      <div style={{ marginTop: '10px' }}>
+  {selectedCategory.blocks.slice(0, summary.unlockedCount).map((b, i) => (
+    <div key={i} style={{ fontSize: '12px', opacity: 0.8 }}>
+      Cañito {i + 1}: {decimal.format(summary.perBlockVolume)} m³ × S/ {(b.potable + b.sewage).toFixed(2)}
+    </div>
+  ))}
+</div>
     </main>
   )
 }
