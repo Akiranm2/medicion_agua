@@ -1,0 +1,143 @@
+.app-shell {
+  width: min(980px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 3rem 0 4rem;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #0b63ce;
+  margin-bottom: 0.75rem;
+}
+
+.subtitle {
+  margin: 0 auto;
+  max-width: 720px;
+  color: #4b5563;
+}
+
+.calculator-card {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 24px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.09);
+  padding: 1.4rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #1f2937;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.field select,
+.field input {
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.field select:focus,
+.field input:focus {
+  outline: none;
+  border-color: #0b63ce;
+  box-shadow: 0 0 0 3px rgba(11, 99, 206, 0.18);
+}
+
+.validation {
+  margin-top: 0.9rem;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.results-grid {
+  margin-top: 1.2rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.result-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  padding: 1rem;
+  text-align: left;
+}
+
+.result-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.result-card h2 {
+  margin: 0.35rem 0;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+.result-card small {
+  color: #6b7280;
+  font-size: 0.88rem;
+}
+
+.result-card.highlight {
+  background: linear-gradient(145deg, #0b63ce, #15498c);
+  color: #f8fafc;
+  border-color: transparent;
+}
+
+.result-card.highlight p,
+.result-card.highlight small {
+  color: #dbeafe;
+}
+
+.result-card.highlight h2 {
+  color: #ffffff;
+}
+
+.footnote {
+  margin-top: 1rem;
+  text-align: center;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .grid,
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    padding-top: 2rem;
+  }
+
+  .result-card h2 {
+    font-size: 1.6rem;
+  }
+}
