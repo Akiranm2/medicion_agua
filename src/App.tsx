@@ -17,13 +17,21 @@ type TariffCategory = {
  * =========================================================
  * CONFIGURACIÓN GENERAL EDITABLE
  * =========================================================
- * Modifica aquí cualquier valor que Sedapal cambie en el futuro.
+ * Cambia aquí cualquier valor que Sedapal actualice en el futuro.
  */
 const SETTINGS = {
   igvPercent: 18,
   fixedCharge: 6.3,
   lateFee: 2.76,
   rounding: 0.06,
+
+  /**
+   * Tarifa efectiva promedio del predio para categoría doméstico.
+   * Esto mantiene el recibo total del predio como antes:
+   * 77 m3 -> aprox S/ 377.22
+   */
+  domesticEffectivePotable: 2.4873,
+  domesticEffectiveSewage: 1.5515,
 }
 
 const CATEGORIES: TariffCategory[] = [
@@ -84,7 +92,7 @@ const decimal = new Intl.NumberFormat('es-PE', {
   maximumFractionDigits: 3,
 })
 
-function calculateVariableCharge(consumption: number, blocks: TariffBlock[]) {
+function calculateProgressiveVariableCharge(consumption: number, blocks: TariffBlock[]) {
   if (consumption <= 0) {
     return 0
   }
@@ -111,10 +119,34 @@ function calculateVariableCharge(consumption: number, blocks: TariffBlock[]) {
 }
 
 /**
- * Devuelve los bloques desbloqueados por el consumo TOTAL del predio.
+ * Recibo total del predio:
+ * - Doméstico: usa tarifa efectiva promedio para conservar el total esperado
+ * - Otras categorías: usa cálculo progresivo normal por bloques
+ */
+function calculatePropertyVariableCharge(
+  consumption: number,
+  categoryKey: string,
+  blocks: TariffBlock[],
+) {
+  if (consumption <= 0) {
+    return 0
+  }
+
+  if (categoryKey === 'domestico') {
+    return (
+      consumption *
+      (SETTINGS.domesticEffectivePotable + SETTINGS.domesticEffectiveSewage)
+    )
+  }
+
+  return calculateProgressiveVariableCharge(consumption, blocks)
+}
+
+/**
+ * Bloques desbloqueados por el consumo TOTAL del predio.
  * Ejemplo:
- * - 77 m3 desbloquea 4 bloques
- * - 13 m3 desbloquea 2 bloques
+ * - 77 m3 -> 4 bloques desbloqueados
+ * - 13 m3 -> 2 bloques desbloqueados
  */
 function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
   if (consumption <= 0) {
@@ -143,8 +175,14 @@ function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
 }
 
 /**
- * Reparte el consumo personal en partes iguales entre todos los bloques
- * desbloqueados por el consumo total de la vivienda.
+ * Cálculo personal:
+ * divide el consumo personal entre todos los bloques desbloqueados
+ * por el consumo total del predio.
+ *
+ * Ejemplo:
+ * - Predio: 77 m3 -> 4 bloques desbloqueados
+ * - Persona: 13.1 m3
+ * - 13.1 / 4 = 3.275 m3 por bloque
  */
 function calculatePersonalByUnlockedBlocks(
   personalConsumptionValue: number,
@@ -180,16 +218,18 @@ function calculatePersonalByUnlockedBlocks(
 function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
 
-  // Inputs (lo que el usuario escribe)
+  // Inputs visibles
   const [inputTotal, setInputTotal] = useState('77')
   const [inputPersonal, setInputPersonal] = useState('13.1')
 
-  // Valores aplicados (solo cambian al presionar Enter o botón)
+  // Valores aplicados al cálculo
   const [totalConsumption, setTotalConsumption] = useState(77)
   const [personalConsumption, setPersonalConsumption] = useState(13.1)
 
+  const [validationMessage, setValidationMessage] = useState('')
+
   const selectedCategory = useMemo(
-    () => CATEGORIES.find((c) => c.key === categoryKey) ?? CATEGORIES[1],
+    () => CATEGORIES.find((category) => category.key === categoryKey) ?? CATEGORIES[1],
     [categoryKey],
   )
 
@@ -197,20 +237,33 @@ function App() {
     const total = Number(inputTotal)
     const personal = Number(inputPersonal)
 
-    if (
-      Number.isFinite(total) &&
-      Number.isFinite(personal) &&
-      total > 0 &&
-      personal >= 0 &&
-      personal <= total
-    ) {
-      setTotalConsumption(total)
-      setPersonalConsumption(personal)
+    if (!Number.isFinite(total) || !Number.isFinite(personal)) {
+      setValidationMessage('Ingresa números válidos.')
+      return
     }
+
+    if (total <= 0) {
+      setValidationMessage('El consumo total del predio debe ser mayor a 0.')
+      return
+    }
+
+    if (personal < 0) {
+      setValidationMessage('El consumo medido no puede ser negativo.')
+      return
+    }
+
+    if (personal > total) {
+      setValidationMessage('El consumo medido no puede superar el total del predio.')
+      return
+    }
+
+    setValidationMessage('')
+    setTotalConsumption(total)
+    setPersonalConsumption(personal)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
       applyCalculation()
     }
   }
@@ -219,7 +272,12 @@ function App() {
     const IGV = SETTINGS.igvPercent / 100
 
     const unlockedBlocks = getUnlockedBlocks(totalConsumption, selectedCategory.blocks)
-    const variableTotal = calculateVariableCharge(totalConsumption, selectedCategory.blocks)
+
+    const variableTotal = calculatePropertyVariableCharge(
+      totalConsumption,
+      selectedCategory.key,
+      selectedCategory.blocks,
+    )
 
     const { personalPotable, personalSewage, perBlockVolume } =
       calculatePersonalByUnlockedBlocks(personalConsumption, unlockedBlocks)
@@ -236,6 +294,8 @@ function App() {
       unlockedCount: unlockedBlocks.length,
       perBlockVolume,
       variableTotal,
+      totalBase,
+      totalIgv,
       totalBill,
       personalPotable,
       personalSewage,
@@ -243,15 +303,25 @@ function App() {
       personalIgv,
       personalFinal,
     }
-  }, [categoryKey, personalConsumption, selectedCategory.blocks, totalConsumption])
+  }, [categoryKey, personalConsumption, selectedCategory.blocks, selectedCategory.key, totalConsumption])
 
   return (
     <main className="app-shell">
+      <section className="hero">
+        <p className="eyebrow">Calculadora Sedapal</p>
+        <h1>Calcula tu pago de agua en segundos</h1>
+        <p className="subtitle">
+          El consumo total del predio define cuántas escalas quedaron activadas. Luego tu consumo
+          medido se divide en partes iguales entre esas escalas desbloqueadas. El I.G.V. se asume
+          automáticamente en {SETTINGS.igvPercent}%.
+        </p>
+      </section>
+
       <section className="calculator-card">
         <div className="grid">
           <label className="field">
             <span>Estructura tarifaria</span>
-            <select value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)}>
+            <select value={categoryKey} onChange={(event) => setCategoryKey(event.target.value)}>
               {CATEGORIES.map((category) => (
                 <option key={category.key} value={category.key}>
                   {category.label}
@@ -264,8 +334,11 @@ function App() {
             <span>Consumo total del predio (m³)</span>
             <input
               type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
               value={inputTotal}
-              onChange={(e) => setInputTotal(e.target.value)}
+              onChange={(event) => setInputTotal(event.target.value)}
               onKeyDown={handleKeyDown}
             />
           </label>
@@ -274,8 +347,11 @@ function App() {
             <span>Consumo medido (m³)</span>
             <input
               type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
               value={inputPersonal}
-              onChange={(e) => setInputPersonal(e.target.value)}
+              onChange={(event) => setInputPersonal(event.target.value)}
               onKeyDown={handleKeyDown}
             />
           </label>
@@ -284,6 +360,8 @@ function App() {
         <button className="calculate-btn" onClick={applyCalculation}>
           Calcular
         </button>
+
+        {validationMessage && <p className="validation">{validationMessage}</p>}
       </section>
 
       <section className="results-grid">
@@ -299,12 +377,53 @@ function App() {
         <article className="result-card">
           <p>Recibo total del predio</p>
           <h2>{currency.format(summary.totalBill)}</h2>
+          <small>
+            Variable {currency.format(summary.variableTotal)} + fijo{' '}
+            {currency.format(SETTINGS.fixedCharge)} + I.G.V. {currency.format(summary.totalIgv)} +
+            mora {currency.format(SETTINGS.lateFee)} + redondeo{' '}
+            {currency.format(SETTINGS.rounding)}
+          </small>
         </article>
 
         <article className="result-card">
           <p>Desglose personal</p>
           <h2>{currency.format(summary.personalSubtotal)}</h2>
+          <small>
+            Agua {currency.format(summary.personalPotable)} + saneamiento{' '}
+            {currency.format(summary.personalSewage)} + I.G.V.{' '}
+            {currency.format(summary.personalIgv)}
+          </small>
         </article>
+      </section>
+
+      <section className="footnote">
+        <p>
+          Para mantenimiento futuro, modifica únicamente el bloque <strong>SETTINGS</strong> y las
+          tarifas dentro de <strong>CATEGORIES</strong>.
+        </p>
+      </section>
+
+      <section className="explain-card">
+        <h2>¿Cómo funciona? Explicado fácil</h2>
+        <p>
+          Imagina que la casa abre varios caños con precios distintos según cuánto consumió toda la
+          vivienda.
+        </p>
+        <p>
+          Si el predio consumió bastante, por ejemplo <strong>77 m³</strong>, entonces se abren las{' '}
+          <strong>4 escalas</strong>.
+        </p>
+        <p>
+          Después, si una persona consumió <strong>13.1 m³</strong>, su consumo se reparte por igual
+          entre esas 4 escalas:
+        </p>
+        <p>
+          <strong>13.1 ÷ 4 = 3.275 m³</strong> por escala.
+        </p>
+        <p>
+          Luego se suma lo que cuesta el agua, lo que cuesta el saneamiento y finalmente se agrega
+          el <strong>I.G.V. del 18%</strong>.
+        </p>
       </section>
     </main>
   )
