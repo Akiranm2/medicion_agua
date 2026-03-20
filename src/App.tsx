@@ -18,6 +18,17 @@ const SETTINGS = {
   fixedCharge: 6.3,
   lateFee: 2.76,
   rounding: 0.06,
+
+  // Tarifas efectivas del RECIBO TOTAL DEL PREDIO
+  // Aquí puedes ajustar manualmente cada categoría cuando Sedapal cambie valores.
+  effectiveRates: {
+    social: { potable: 1.92, sewage: 0.9 },
+    domestico: { potable: 2.4873, sewage: 1.5515 }, // mantiene ~377.22 con 77 m³
+    'domestico-sub': { potable: 2.20, sewage: 1.38 }, // ajustable
+    comercial: { potable: 8.82, sewage: 4.21 },
+    industrial: { potable: 9.46, sewage: 4.51 },
+    estatal: { potable: 5.8, sewage: 2.68 },
+  },
 }
 
 const CATEGORIES: TariffCategory[] = [
@@ -86,9 +97,9 @@ function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
 
   for (const block of blocks) {
     const currentLimit = block.upTo ?? Number.POSITIVE_INFINITY
-    const blockVolume = Math.max(0, Math.min(consumption, currentLimit) - previousLimit)
+    const volume = Math.max(0, Math.min(consumption, currentLimit) - previousLimit)
 
-    if (blockVolume > 0) unlocked.push(block)
+    if (volume > 0) unlocked.push(block)
 
     previousLimit = currentLimit
     if (consumption <= currentLimit) break
@@ -97,33 +108,8 @@ function getUnlockedBlocks(consumption: number, blocks: TariffBlock[]) {
   return unlocked
 }
 
-function getAverageRate(blocks: TariffBlock[]) {
-  if (!blocks.length) return { potable: 0, sewage: 0 }
-
-  const totals = blocks.reduce(
-    (acc, block) => {
-      acc.potable += block.potable
-      acc.sewage += block.sewage
-      return acc
-    },
-    { potable: 0, sewage: 0 },
-  )
-
-  return {
-    potable: totals.potable / blocks.length,
-    sewage: totals.sewage / blocks.length,
-  }
-}
-
-function calculatePropertyVariableCharge(consumption: number, blocks: TariffBlock[]) {
-  if (consumption <= 0) return 0
-
-  const avg = getAverageRate(blocks)
-  return consumption * (avg.potable + avg.sewage)
-}
-
 function calculatePersonalCharge(personalConsumption: number, unlockedBlocks: TariffBlock[]) {
-  if (personalConsumption <= 0 || !unlockedBlocks.length) {
+  if (personalConsumption <= 0 || unlockedBlocks.length === 0) {
     return { potable: 0, sewage: 0, perBlockVolume: 0 }
   }
 
@@ -142,12 +128,22 @@ function calculatePersonalCharge(personalConsumption: number, unlockedBlocks: Ta
   return { potable, sewage, perBlockVolume }
 }
 
+function calculatePropertyVariableCharge(
+  totalConsumption: number,
+  categoryKey: keyof typeof SETTINGS.effectiveRates,
+) {
+  if (totalConsumption <= 0) return 0
+
+  const rate = SETTINGS.effectiveRates[categoryKey]
+  return totalConsumption * (rate.potable + rate.sewage)
+}
+
 function App() {
   const [categoryKey, setCategoryKey] = useState('domestico')
   const [inputTotal, setInputTotal] = useState('77')
-  const [inputPersonal, setInputPersonal] = useState('13.1')
+  const [inputPersonal, setInputPersonal] = useState('13')
   const [appliedTotal, setAppliedTotal] = useState(77)
-  const [appliedPersonal, setAppliedPersonal] = useState(13.1)
+  const [appliedPersonal, setAppliedPersonal] = useState(13)
   const [error, setError] = useState('')
 
   const selectedCategory =
@@ -190,7 +186,11 @@ function App() {
     const igv = SETTINGS.igvPercent / 100
     const unlockedBlocks = getUnlockedBlocks(appliedTotal, selectedCategory.blocks)
 
-    const variableTotal = calculatePropertyVariableCharge(appliedTotal, selectedCategory.blocks)
+    const variableTotal = calculatePropertyVariableCharge(
+      appliedTotal,
+      selectedCategory.key as keyof typeof SETTINGS.effectiveRates,
+    )
+
     const personal = calculatePersonalCharge(appliedPersonal, unlockedBlocks)
 
     const personalSubtotal = personal.potable + personal.sewage
@@ -213,7 +213,7 @@ function App() {
       personalIgv,
       personalFinal,
     }
-  }, [appliedPersonal, appliedTotal, selectedCategory.blocks])
+  }, [appliedPersonal, appliedTotal, selectedCategory])
 
   return (
     <main className="app-shell">
@@ -316,16 +316,16 @@ function App() {
       <section className="explain-card">
         <h2>¿Cómo funciona? Explicado fácil</h2>
         <p>
-          Si la casa consume bastante agua, se activan más escalas de cobro. Luego tu consumo se
-          reparte entre esas escalas activadas.
+          Si la casa consume bastante agua, se activan más escalas. Luego tu consumo se reparte
+          entre esas escalas activadas.
         </p>
         <p>
           Por ejemplo, si el predio consumió <strong>77 m³</strong> y se activaron{' '}
-          <strong>4 escalas</strong>, entonces un consumo personal de <strong>13.1 m³</strong> se
+          <strong>4 escalas</strong>, entonces un consumo personal de <strong>13 m³</strong> se
           divide así:
         </p>
         <p>
-          <strong>13.1 ÷ 4 = 3.275 m³</strong> por escala.
+          <strong>13 ÷ 4 = 3.25 m³</strong> por escala.
         </p>
         <p>
           Después se suma agua, saneamiento y finalmente se agrega el <strong>I.G.V.</strong>.
