@@ -70,6 +70,11 @@ const decimal = new Intl.NumberFormat('es-PE', {
   maximumFractionDigits: 2,
 })
 
+const DEFAULT_IGV_PERCENT = 18
+const DEFAULT_FIXED_CHARGE = 6.3
+const DEFAULT_LATE_FEE = 2.76
+const DEFAULT_ROUNDING = 0.06
+
 const DOMESTIC_EFFECTIVE_POTABLE = 2.4873
 const DOMESTIC_EFFECTIVE_SEWAGE = 1.5515
 
@@ -158,10 +163,6 @@ function App() {
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[1].key)
   const [totalConsumption, setTotalConsumption] = useState('25')
   const [personalConsumption, setPersonalConsumption] = useState('7.5')
-  const [igvPercent, setIgvPercent] = useState('18')
-  const [fixedCharge, setFixedCharge] = useState('6.30')
-  const [lateFee, setLateFee] = useState('2.76')
-  const [rounding, setRounding] = useState('0.06')
 
   const selectedCategory = useMemo(
     () => CATEGORIES.find((category) => category.key === categoryKey) ?? CATEGORIES[1],
@@ -170,22 +171,15 @@ function App() {
 
   const totalValue = Number(totalConsumption)
   const personalValue = Number(personalConsumption)
-  const igvPercentValue = Number(igvPercent)
-  const fixedChargeValue = Number(fixedCharge)
-  const lateFeeValue = Number(lateFee)
-  const roundingValue = Number(rounding)
+  const igvPercentValue = DEFAULT_IGV_PERCENT
+  const fixedChargeValue = DEFAULT_FIXED_CHARGE
+  const lateFeeValue = DEFAULT_LATE_FEE
+  const roundingValue = DEFAULT_ROUNDING
   const hasValidValues =
     Number.isFinite(totalValue) &&
     Number.isFinite(personalValue) &&
-    Number.isFinite(igvPercentValue) &&
-    Number.isFinite(fixedChargeValue) &&
-    Number.isFinite(lateFeeValue) &&
-    Number.isFinite(roundingValue) &&
     totalValue > 0 &&
     personalValue >= 0 &&
-    igvPercentValue >= 0 &&
-    fixedChargeValue >= 0 &&
-    lateFeeValue >= 0 &&
     personalValue <= totalValue
 
   const summary = useMemo(() => {
@@ -227,11 +221,8 @@ function App() {
       perBlockVolume,
     }
   }, [
-    fixedChargeValue,
     hasValidValues,
     igvPercentValue,
-    lateFeeValue,
-    roundingValue,
     selectedCategory.key,
     selectedCategory.blocks,
     totalValue,
@@ -246,6 +237,7 @@ function App() {
           Ingresa el consumo total del predio y tu lectura personal. El consumo total se calcula
           por tramos tarifarios y tu consumo se divide en partes iguales entre los bloques
           desbloqueados por el consumo total. Luego se suma agua + saneamiento y se aplica I.G.V.
+          ({DEFAULT_IGV_PERCENT}% por defecto).
         </p>
       </section>
 
@@ -285,47 +277,8 @@ function App() {
           </label>
 
           <label className="field">
-            <span>I.G.V. (%)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={igvPercent}
-              onChange={(event) => setIgvPercent(event.target.value)}
-            />
-          </label>
-
-          <label className="field">
-            <span>Cargo fijo mensual (S/)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={fixedCharge}
-              onChange={(event) => setFixedCharge(event.target.value)}
-            />
-          </label>
-
-          <label className="field">
-            <span>Mora (S/)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={lateFee}
-              onChange={(event) => setLateFee(event.target.value)}
-            />
-          </label>
-
-          <label className="field">
-            <span>Redondeo (S/)</span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={rounding}
-              onChange={(event) => setRounding(event.target.value)}
-            />
+            <span>I.G.V. por defecto</span>
+            <input type="text" value={`${DEFAULT_IGV_PERCENT}%`} disabled />
           </label>
         </div>
         {!hasValidValues && (
@@ -374,6 +327,20 @@ function App() {
         <p>
           Referencia usada: Grupo 1 de Sedapal y tarifa por volumen de agua potable +
           saneamiento. El cálculo personal divide m³ en bloques desbloqueados y aplica I.G.V.
+        </p>
+      </section>
+
+      <section className="explain-card">
+        <h2>¿Cómo lo explicamos fácil?</h2>
+        <p>
+          Imagina que hay tres caños de colores para llenar baldes: uno azul (barato), uno verde
+          (medio) y uno rojo (caro). Cuando la casa usa más agua, se van abriendo más caños con
+          precios diferentes.
+        </p>
+        <p>
+          Como no sabemos en qué caño cayó exactamente tu parte, el sistema reparte tu consumo en
+          partes iguales entre los caños abiertos. Después suma agua + saneamiento y al final
+          agrega el I.G.V.
         </p>
       </section>
     </main>
