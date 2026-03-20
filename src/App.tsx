@@ -19,12 +19,12 @@ const SETTINGS = {
   lateFee: 2.76,
   rounding: 0.06,
 
-  // Tarifas efectivas del RECIBO TOTAL DEL PREDIO
-  // Aquí puedes ajustar manualmente cada categoría cuando Sedapal cambie valores.
+  // Tarifas efectivas para el RECIBO TOTAL DEL PREDIO
+  // Ajusta estos valores si Sedapal cambia el esquema.
   effectiveRates: {
     social: { potable: 1.92, sewage: 0.9 },
-    domestico: { potable: 2.4873, sewage: 1.5515 }, // mantiene ~377.22 con 77 m³
-    'domestico-sub': { potable: 2.20, sewage: 1.38 }, // ajustable
+    domestico: { potable: 2.4873, sewage: 1.5515 }, // mantiene ~S/ 377.22 con 77 m³
+    'domestico-sub': { potable: 2.20, sewage: 1.38 },
     comercial: { potable: 8.82, sewage: 4.21 },
     industrial: { potable: 9.46, sewage: 4.51 },
     estatal: { potable: 5.8, sewage: 2.68 },
@@ -179,7 +179,9 @@ function App() {
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') applyCalculation()
+    if (event.key === 'Enter') {
+      applyCalculation()
+    }
   }
 
   const summary = useMemo(() => {
@@ -316,87 +318,99 @@ function App() {
       <section className="explain-card">
         <h2>¿Cómo funciona? Explicado fácil</h2>
 
-  <p>
-    En esta casa se consumieron <strong>{decimal.format(appliedTotal)} m³</strong> en total.
-    Eso activa <strong>{summary.unlockedCount} escalas</strong> de cobro.
-  </p>
+        <p>
+          En esta casa se consumieron <strong>{decimal.format(appliedTotal)} m³</strong> en total.
+          Eso activa <strong>{summary.unlockedCount} escalas</strong> de cobro.
+        </p>
 
-  <p>
-    Tu consumo fue de <strong>{decimal.format(appliedPersonal)} m³</strong>, así que se divide entre
-    esas escalas:
-  </p>
+        <p>
+          Tu consumo fue de <strong>{decimal.format(appliedPersonal)} m³</strong>, así que se divide
+          entre esas escalas:
+        </p>
 
-  <p>
-    <strong>
-      {decimal.format(appliedPersonal)} ÷ {summary.unlockedCount} ={' '}
-      {decimal.format(summary.perBlockVolume)} m³ por escala
-    </strong>
-  </p>
+        <p>
+          <strong>
+            {decimal.format(appliedPersonal)} ÷ {summary.unlockedCount} ={' '}
+            {decimal.format(summary.perBlockVolume)} m³ por escala
+          </strong>
+        </p>
 
-  <hr />
+        <hr />
 
-  <h3>🧒 Explicación como para un niño de 3 años</h3>
+        <h3>🧒 Explicación como para un niño de 3 años</h3>
 
-  <p>
-    Imagina que hay <strong>{summary.unlockedCount} cañitos de agua</strong> (grifos):
-  </p>
+        <p>
+          Imagina que hay <strong>{summary.unlockedCount} salidas de agua</strong>, como si fueran{' '}
+          <strong>cañitos</strong>.
+        </p>
 
-  <ul>
-    {Array.from({ length: summary.unlockedCount }).map((_, i) => (
-      <li key={i}>
-        🚰 Cañito {i + 1} (precio diferente)
-      </li>
-    ))}
-  </ul>
+        <p>
+          La casa usó tanta agua que tuvo que abrir todos esos cañitos al mismo tiempo.
+        </p>
 
-  <p>
-    La casa abrió todos esos cañitos porque usó mucha agua.
-  </p>
+        <ul>
+          {Array.from({ length: summary.unlockedCount }).map((_, i) => (
+            <li key={i}>🚰 Cañito {i + 1} abierto</li>
+          ))}
+        </ul>
 
-  <p>
-    Ahora tú usaste <strong>{decimal.format(appliedPersonal)} m³</strong>, entonces es como si
-    llenaras todos los cañitos por igual:
-  </p>
+        <p>
+          Ahora imagina que tú eres un niñito con un baldecito y llevas{' '}
+          <strong>{decimal.format(appliedPersonal)} m³</strong> de agua.
+        </p>
 
-  <p>
-    Cada cañito recibe <strong>{decimal.format(summary.perBlockVolume)} m³</strong>
-  </p>
+        <p>
+          Como no se sabe exactamente en cuál cañito cayó más tu agua, el sistema hace algo
+          sencillo: reparte tu agua en partes iguales entre todos los cañitos abiertos.
+        </p>
 
-  <p>
-    ⚠️ Pero aquí está lo importante:
-  </p>
+        <p>
+          Entonces cada cañito recibe{' '}
+          <strong>{decimal.format(summary.perBlockVolume)} m³</strong>.
+        </p>
 
-  <p>
-    Cada cañito cobra distinto:
-  </p>
+        <p>⚠️ Pero aquí viene la parte importante:</p>
 
-  <ul>
-    {selectedCategory.blocks.slice(0, summary.unlockedCount).map((b, i) => (
-      <li key={i}>
-        💧 Cañito {i + 1}: S/ {(b.potable + b.sewage).toFixed(2)} por m³
-      </li>
-    ))}
-  </ul>
+        <p>
+          Aunque cada cañito recibe la misma cantidad de agua, <strong>no todos cobran igual</strong>.
+          Unos son más baratos y otros más caros.
+        </p>
 
-  <p>
-    Entonces, aunque pongas la misma agua en cada uno, unos cobran barato y otros caro.
-  </p>
+        <ul>
+          {selectedCategory.blocks.slice(0, summary.unlockedCount).map((block, i) => (
+            <li key={i}>
+              💧 Cañito {i + 1}: S/ {(block.potable + block.sewage).toFixed(2)} por m³
+            </li>
+          ))}
+        </ul>
 
-  <p>
-    👉 Por eso tu pago no es simplemente “todo al mismo precio”.
-  </p>
+        <p>
+          Es como si tuvieras <strong>3 salidas de agua</strong>: una azul, una verde y una roja.
+        </p>
 
-  <p>
-    Es una mezcla de varios precios al mismo tiempo.
-  </p>
+        <p>
+          El niñito de 3 años pone un poquito de agua en cada una, pero la salida azul cobra barato,
+          la verde cobra más y la roja cobra caro.
+        </p>
+
+        <p>
+          Entonces, aunque el agua se reparta parejita, el precio final no sale igual en todas,
+          porque cada salida tiene su propio precio.
+        </p>
+
+        <p>
+          👉 Por eso tu pago no usa un solo precio. Es una mezcla de varios precios al mismo tiempo.
+        </p>
+
+        <div style={{ marginTop: '12px', fontSize: '12px', opacity: 0.8 }}>
+          {selectedCategory.blocks.slice(0, summary.unlockedCount).map((block, i) => (
+            <div key={i}>
+              Cañito {i + 1}: {decimal.format(summary.perBlockVolume)} m³ × S/{' '}
+              {(block.potable + block.sewage).toFixed(2)}
+            </div>
+          ))}
+        </div>
       </section>
-      <div style={{ marginTop: '10px' }}>
-  {selectedCategory.blocks.slice(0, summary.unlockedCount).map((b, i) => (
-    <div key={i} style={{ fontSize: '12px', opacity: 0.8 }}>
-      Cañito {i + 1}: {decimal.format(summary.perBlockVolume)} m³ × S/ {(b.potable + b.sewage).toFixed(2)}
-    </div>
-  ))}
-</div>
     </main>
   )
 }
